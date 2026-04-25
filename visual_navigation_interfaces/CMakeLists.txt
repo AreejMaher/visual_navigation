@@ -19,6 +19,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MotionList.msg"
   "msg/RoiFeature.msg"
   "msg/RoiFeatureList.msg"
+  "msg/BoundingBox.msg"
+  "msg/DetectionList.msg"
+  "msg/CameraMotion.msg"
   DEPENDENCIES geometry_msgs action_msgs
 )
 
