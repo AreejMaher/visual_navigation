@@ -32,7 +32,8 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 
-import json
+from visual_navigation_interfaces.msg import MotionList, CameraMotion
+from visual_navigation_interfaces.srv import EstimateMotion # Use your custom srv
 import math
 import time
 
@@ -122,7 +123,7 @@ class VisualOdometryNode(Node):
 
         # ── ROS2 subscriber ───────────────────────────────────────────────────
         self.motion_sub = self.create_subscription(
-            String,
+            MotionList,
             '/motion_data',
             self._motion_callback,
             10
@@ -130,14 +131,14 @@ class VisualOdometryNode(Node):
 
         # ── ROS2 publisher ────────────────────────────────────────────────────
         self.camera_motion_pub = self.create_publisher(
-            String,
+            CameraMotion,
             '/camera_motion',
             10
         )
 
         # ── ROS2 service ─────────────────────────────────────────────────────
         self.estimate_srv = self.create_service(
-            Trigger,
+            EstimateMotion,
             '/estimate_motion',
             self._estimate_motion_callback
         )
@@ -161,23 +162,27 @@ class VisualOdometryNode(Node):
 
     # ── callbacks ─────────────────────────────────────────────────────────────
 
-    def _motion_callback(self, msg: String) -> None:
-        """
-        Receive JSON motion data from the Motion Tracking Node.
-
-        Expected JSON keys:
-          dx            (float) — mean horizontal optical-flow shift (pixels)
-          dy            (float) — mean vertical   optical-flow shift (pixels)
-          magnitude     (float) — overall motion magnitude
-          feature_count (int)   — number of tracked feature points
-          is_blurry     (bool)  — True when Laplacian variance is low
-          variance      (float) — pixel-level scene variance (optional)
-        """
-        try:
-            data: dict = json.loads(msg.data)
-        except (json.JSONDecodeError, ValueError) as exc:
-            self.get_logger().error(f'[VO] JSON parse error: {exc}')
+    def _motion_callback(self, msg: MotionList) -> None:
+        reliable_boxes = [m for m in msg.motion if m.is_reliable]
+        
+        if not reliable_boxes:
+            self.estimation_reliable = False
+            self._publish_camera_motion()
             return
+
+        # Calculate the average movement across the grid
+        avg_dx = sum(m.dx for m in reliable_boxes) / len(reliable_boxes)
+        avg_dy = sum(m.dy for m in reliable_boxes) / len(reliable_boxes)
+        avg_mag = sum(m.magnitude for m in reliable_boxes) / len(reliable_boxes)
+
+        # Build a data dictionary to keep the rest of the logic working
+        data = {
+            'dx': avg_dx,
+            'dy': avg_dy,
+            'magnitude': avg_mag,
+            'reliable_count': len(reliable_boxes),
+            'total_boxes': len(msg.motion)
+        }
 
         self.last_motion_data = data
         self.total_frames_processed += 1
@@ -192,13 +197,11 @@ class VisualOdometryNode(Node):
             return  # no data yet
 
         if not self.estimation_reliable:
-            payload = self._build_stop_payload()
+            msg = self._build_stop_payload()
         else:
-            payload = self._build_motion_payload()
+            msg = self._build_motion_payload()
 
-        out = String()
-        out.data = json.dumps(payload)
-        self.camera_motion_pub.publish(out)
+        self.camera_motion_pub.publish(msg)
 
     def _estimate_motion_callback(self, request, response: Trigger.Response):
         """
@@ -289,39 +292,19 @@ class VisualOdometryNode(Node):
         )
 
     # ── reliability ───────────────────────────────────────────────────────────
-
-    def _check_reliability(
-        self,
-        feature_count: int,
-        is_blurry: bool,
-        magnitude: float
-    ) -> tuple[bool, list[str]]:
-        """
-        Decide whether the current motion estimation is trustworthy.
-
-        Failure conditions:
-          - Image is blurry             (Laplacian variance too low)
-          - Too few tracked features    (sparse scene)
-          - Excessive motion magnitude  (dynamic scene / camera shake)
-
-        Returns:
-            (is_reliable, list_of_failure_reasons)
-        """
+    ##
+    def _check_reliability(self, data: dict) -> tuple[bool, list[str]]:
         reasons: list[str] = []
+        
+        reliable_count = data.get('reliable_count', 0)
+        if reliable_count < 5:  # If more than half the grid is unreliable
+            reasons.append(f'LOW_RELIABLE_CELLS({reliable_count}/9)')
 
-        if is_blurry:
-            reasons.append('IMAGE_BLURRY')
-
-        if feature_count < self.min_features:
-            reasons.append(f'LOW_FEATURES({feature_count}<{self.min_features})')
-
-        # Very large optical-flow → camera shake or chaotic scene
-        if magnitude > 150.0:
-            reasons.append(f'EXCESSIVE_MOTION({magnitude:.1f}px)')
+        if data.get('magnitude', 0.0) > 150.0:
+            reasons.append('EXCESSIVE_MOTION')
 
         return (len(reasons) == 0), reasons
-
-    # ── pose update ───────────────────────────────────────────────────────────
+    ##
 
     def _update_pose(self, direction: str, dx: float, dy: float) -> None:
         """
@@ -345,38 +328,30 @@ class VisualOdometryNode(Node):
 
     # ── payload builders ──────────────────────────────────────────────────────
 
-    def _build_motion_payload(self) -> dict:
-        """Build a well-formed /camera_motion payload for reliable frames."""
+    def _build_motion_payload(self) -> CameraMotion:
+        """Build a well-formed CameraMotion message for reliable frames."""
+        msg = CameraMotion()
         latest = self.motion_history[-1] if self.motion_history else {}
-        return {
-            'status':    'OK',
-            'reliable':  True,
-            'direction': latest.get('direction', 'STATIONARY'),
-            'dx':        latest.get('dx',         0.0),
-            'dy':        latest.get('dy',         0.0),
-            'magnitude': latest.get('magnitude',  0.0),
-            'features':  latest.get('features',   0),
-            'pose':      {k: round(v, 4) for k, v in self.camera_pose.items()},
-            'frames_processed': self.total_frames_processed,
-            'unreliable_count': self.unreliable_count,
-            'timestamp': time.time(),
-        }
+        
+        msg.linear_x = float(latest.get('dy', 0.0) * -0.01) # Forward/Backward
+        msg.angular_z = float(latest.get('dx', 0.0) * -0.01) # Rotation
+        msg.direction = str(latest.get('direction', 'STATIONARY'))
+        msg.is_reliable = True
+        
+        msg.reliability_score = float(self.last_motion_data.get('reliable_count', 0) / 9.0)
+        
+        return msg
 
-    def _build_stop_payload(self) -> dict:
+    def _build_stop_payload(self) -> CameraMotion:
         """Build a STOP payload used when estimation is unreliable."""
-        return {
-            'status':    'UNRELIABLE',
-            'reliable':  False,
-            'command':   'STOP',            # consumed by Navigation Decision Node
-            'direction': 'UNKNOWN',
-            'dx':        0.0,
-            'dy':        0.0,
-            'magnitude': 0.0,
-            'pose':      {k: round(v, 4) for k, v in self.camera_pose.items()},
-            'frames_processed': self.total_frames_processed,
-            'unreliable_count': self.unreliable_count,
-            'timestamp': time.time(),
-        }
+        msg = CameraMotion()
+        msg.is_reliable = False
+        msg.direction = "STOP"
+        msg.reliability_score = 0.0
+        msg.linear_x = 0.0
+        msg.angular_z = 0.0
+        
+        return msg
 
 
 # ─────────────────────────────────────────────────────────────────────────────
