@@ -1,0 +1,9 @@
+# Goal
+string command
+float32 duration
+---
+# Result
+bool success
+---
+# Feedback
+float32 time_remaining
