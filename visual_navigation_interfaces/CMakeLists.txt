@@ -16,6 +16,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/EstimateMotion.srv"
   "action/MapsAction.action"
   "msg/MotionData.msg"
+  "msg/MotionList.msg"
+  "msg/RoiFeature.msg"
+  "msg/RoiFeatureList.msg"
   DEPENDENCIES geometry_msgs action_msgs
 )
 
