@@ -36,7 +36,7 @@ class Depth_Estimator(Node):
 
         self.create_subscription(Image, "/camera_frames", self.camera_callback, 10)
         self.depth_pub = self.create_publisher(Image, "/depth_data", 10)
-        self.declare_parameter('depth_threshold', 15)
+        self.declare_parameter('depth_threshold', 10)
 
     def camera_callback(self, img):
         frame = self.bridge.imgmsg_to_cv2(img, desired_encoding='bgr8')
@@ -45,25 +45,27 @@ class Depth_Estimator(Node):
         # --- DISTANCE ESTIMATION ---
         # Extract a 40x40 pixel box in the center and calculate the mean depth
         h, w = depth_map_raw.shape
-        center_target = depth_map_raw[h//2-20:h//2+20, w//2-20:w//2+20]
-        proximity_score = center_target.mean()
+        # center_target = depth_map_raw[h//2-20:h//2+20, w//2-20:w//2+20]
+        # proximity_score = center_target.mean()
+        center_zone = depth_map_raw[h//3:2*h//3, w//3:2*w//3]
+        avg_distance = float(center_zone.mean())
 
         threshold = self.get_parameter('depth_threshold').value
     
-        if proximity_score < threshold:
-            self.get_logger().warn(f"Student Out of Bounds! Distance: {proximity_score:.2f}")
+        if avg_distance > threshold:
+            self.get_logger().warn(f"OBSTACLE DETECTED! Distance: {avg_distance:.2f}")
         else:
-            self.get_logger().info(f"Frame {img.header.frame_id} | Center Distance Score: {proximity_score:.2f}") 
+            self.get_logger().info(f"Path Clear | Distance: {avg_distance:.2f}")
 
         depth_map = self.bridge.cv2_to_imgmsg(depth_map_raw, encoding='32FC1', header=img.header)
     
         self.depth_pub.publish(depth_map)
 
-        # Visualization 
-        depth_normalized = cv2.normalize(depth_map_raw, None, 0, 255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-        depth_colormap = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_JET)
-        cv2.imshow('Depth Map', depth_colormap)
-        cv2.waitKey(1)
+        # # Visualization 
+        # depth_normalized = cv2.normalize(depth_map_raw, None, 0, 255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        # depth_colormap = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_JET)
+        # cv2.imshow('Depth Map', depth_colormap)
+        # cv2.waitKey(1)
 
 def main(args=None):
     rclpy.init(args=args)

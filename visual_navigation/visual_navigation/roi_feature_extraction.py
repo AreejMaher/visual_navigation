@@ -5,7 +5,6 @@ from sensor_msgs.msg import Image
 from visual_navigation_interfaces.msg import RoiFeature, RoiFeatureList
 import cv2
 import numpy as np
-import time
 
 
 class ROIFeatureNode(Node):
@@ -77,7 +76,7 @@ class ROIFeatureNode(Node):
                     # img2 = cv2.drawKeypoints(frame,keypoints,None,color=(0,255,0), flags=0)
 
                     roi_features = RoiFeature()
-                    roi_features.is_reliable = std_dev > 10.0 and num_keypoints > 3
+                    roi_features.is_reliable = std_dev > 8.0 and num_keypoints > 2
                     roi_features.grid_i = i
                     roi_features.grid_j = j
                     roi_features.centroid_x = centroid_x
@@ -87,17 +86,28 @@ class ROIFeatureNode(Node):
 
                     roi_list.features.append(roi_features)
 
-                     # --- Visualize ---
+                    # --- Visualize ---
                     color = (0, 255, 0) if roi_features.is_reliable else (0, 0, 255)
                     cv2.rectangle(frame, (x_start, y_start), (x_end, y_end), color, 1)
+                    
+                    # KEYPOINTS (Yellow)
+                    for kp in keypoints_1:
+                        # Add the ROI offset to the keypoint's local coordinates
+                        kp_x = int(kp.pt[0] + x_start)
+                        kp_y = int(kp.pt[1] + y_start)
+                        # Draw a small yellow circle 
+                        cv2.circle(frame, (kp_x, kp_y), 2, (0, 255, 255), -1)
+
+                    # CENTROID (Red)
+                    # The centroid represents the "weighted center" of brightness
+                    cv2.circle(frame, (int(centroid_x), int(centroid_y)), 4, (0, 0, 255), -1)
+
+                    # 3. Text Overlay
                     cv2.putText(frame,
                                 f"std:{std_dev:.1f} kp:{num_keypoints}",
                                 (x_start + 4, y_start + 16),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                (26, 25, 83), 3)
-                    cv2.circle(frame,
-                               (int(centroid_x), int(centroid_y)),
-                               3, (0, 0, 255), -1)
+                                (255, 255, 255), 1)
             # --- Publish ---
             self.roi_pub.publish(roi_list)
             reliable_count = sum(1 for f in roi_list.features if f.is_reliable)
@@ -106,8 +116,8 @@ class ROIFeatureNode(Node):
                 f'{reliable_count} reliable'
             )
 
-            # cv2.imshow('ROI Feature Extraction', frame)
-            # cv2.waitKey(1)
+            cv2.imshow('ROI Feature Extraction', frame)
+            cv2.waitKey(1)
 
         except Exception as e:
             self.get_logger().error(f'Callback failed: {e}')
@@ -122,7 +132,7 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        # cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
         if rclpy.ok():
             rclpy.shutdown()
 

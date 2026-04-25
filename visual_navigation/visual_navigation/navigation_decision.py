@@ -20,7 +20,7 @@ class VehicleNavigationNode(Node):
         self.publisher = self.create_publisher(String, '/navigation_command', 10)
         
         # Parameters
-        self.declare_parameter('safety_distance', 20.0)
+        self.declare_parameter('safety_distance', 15.0)
         self.declare_parameter('motion_reliability_threshold', 0.5)
         
         self.current_obstacles = []

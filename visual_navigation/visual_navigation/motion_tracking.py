@@ -1,7 +1,6 @@
 import rclpy
 from rclpy.node import Node 
-from visual_navigation_interfaces.msg import RoiFeature, RoiFeatureList, MotionData, MotionList
-import cv2
+from visual_navigation_interfaces.msg import RoiFeatureList, MotionData, MotionList
 import numpy as np
 
 
@@ -21,6 +20,8 @@ class MotionTracking(Node):
             return
         
         motion_List = MotionList()
+        reliable_count = 0
+        moving_count = 0
 
         for prev_box, current_box in zip(self.previous_features, msg.features):
             motion_data = MotionData()
@@ -28,6 +29,7 @@ class MotionTracking(Node):
             motion_data.grid_i = current_box.grid_i
             motion_data.grid_j = current_box.grid_j
             if prev_box.is_reliable and current_box.is_reliable:
+                reliable_count += 1
                 # ---- pixel shift ----
                 dx = current_box.centroid_x - prev_box.centroid_x 
                 dy = current_box.centroid_y - prev_box.centroid_y
@@ -46,6 +48,7 @@ class MotionTracking(Node):
                 if magnitude < threshold :
                     motion_data.direction = "STOP"
                 else:
+                    moving_count += 1
                     if abs(dx) > abs(dy): 
                         if dx < 0 :
                             motion_data.direction = "LEFT"
@@ -64,7 +67,11 @@ class MotionTracking(Node):
 
         self.previous_features = msg.features
         self.motion_pub.publish(motion_List)
-
+        self.get_logger().info(
+            f"Processed {len(motion_List.motion)} ROIs | "
+            f"Reliable: {reliable_count} | "
+            f"Moving: {moving_count}"
+        )
 
 def main(args=None):
     try:
