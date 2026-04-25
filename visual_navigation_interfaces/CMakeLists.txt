@@ -14,7 +14,7 @@ find_package(builtin_interfaces REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/EstimateMotion.srv"
-  "action/MapsAction.action"
+  "action/NavigateAction.action"
   "msg/MotionData.msg"
   "msg/MotionList.msg"
   "msg/RoiFeature.msg"
