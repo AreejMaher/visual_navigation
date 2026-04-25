@@ -15,7 +15,7 @@ class ROIFeatureNode(Node):
         self.bridge = CvBridge()
         self.orb = cv2.ORB_create()
 
-        self.create_subscription(Image, '/camera_frames', self.feacture_callback, 10)
+        self.create_subscription(Image, '/camera_frames', self.feature_callback, 10)
         self.roi_pub = self.create_publisher(RoiFeatureList, '/roi_features', 10)
         self.declare_parameter('roi_size', 3)
 
@@ -23,7 +23,7 @@ class ROIFeatureNode(Node):
 
         self.get_logger().info('ROI Feature Extraction Node started.')
 
-    def feacture_callback(self, img):
+    def feature_callback(self, img):
         try:
             frame = self.bridge.imgmsg_to_cv2(img, desired_encoding= "bgr8")
             # self.get_logger().info(f"frame (height, width, channel) :  {frame.shape}") // (h, w, ch) (480, 640, 3)
@@ -106,8 +106,8 @@ class ROIFeatureNode(Node):
                 f'{reliable_count} reliable'
             )
 
-            cv2.imshow('ROI Feature Extraction', frame)
-            cv2.waitKey(1)
+            # cv2.imshow('ROI Feature Extraction', frame)
+            # cv2.waitKey(1)
 
         except Exception as e:
             self.get_logger().error(f'Callback failed: {e}')
@@ -122,7 +122,7 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows()
         if rclpy.ok():
             rclpy.shutdown()
 

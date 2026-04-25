@@ -58,7 +58,8 @@ class ObjectDetectionNode(Node):
                 b.confidence = float(box.conf[0].item())
                 
                 # YOLO classes are numbers (0=person), convert to string
-                b.class_name = str(int(box.cls[0].item())) 
+                # b.class_name = str(int(box.cls[0].item())) 
+                b.class_name = self.model.names[int(box.cls[0])]
                 
                 msg_out.detections.append(b)
         
