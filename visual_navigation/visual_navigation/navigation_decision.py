@@ -1,8 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from exam_interfaces.msg import DetectionList
-from std_msgs.msg import String, Float32MultiArray
+from std_msgs.msg import String
 from visual_navigation_interfaces.msg import DetectionList, CameraMotion
 import numpy as np
 from cv_bridge import CvBridge
@@ -15,9 +14,8 @@ class VehicleNavigationNode(Node):
         # Subscriptions
         self.create_subscription(DetectionList, '/object_data', self.object_callback, 10)
         self.create_subscription(Image, '/depth_data', self.depth_callback, 10)
-        ##
         self.create_subscription(CameraMotion, '/camera_motion', self.motion_callback, 10)
-        ##
+
         # Publisher
         self.publisher = self.create_publisher(String, '/navigation_command', 10)
         
@@ -28,22 +26,16 @@ class VehicleNavigationNode(Node):
         self.current_obstacles = []
         self.latest_depth_map = None
 
-        ##
         self.motion_is_reliable = True
         self.motion_reliability_val = 1.0
-        ##
     
     def object_callback(self, msg):
         self.current_obstacles = msg.detections
 
 
     def motion_callback(self, msg):
-        ##
-        # if msg.data:
-        #     self.motion_reliability = msg.data[0] 
         self.motion_is_reliable = msg.is_reliable
         self.motion_reliability_val = msg.reliability_score
-        ##
 
     def depth_callback(self, msg):
         self.latest_depth_map = self.bridge.imgmsg_to_cv2(msg, desired_encoding='32FC1')
@@ -65,13 +57,8 @@ class VehicleNavigationNode(Node):
         ##
         if not self.motion_is_reliable or self.motion_reliability_val < reliability_thresh:
             cmd.data = "STOP"
-            self.get_logger().warn(f"Decision: {cmd.data} | Reason: Motion Unreliable")
+            self.get_logger().warn(f"Decision: {cmd.data} | Reason: Motion Unreliable ({self.motion_reliability_val:.2f})")
         ##
-
-        # 1. Handle Unreliable Motion (System Rule)
-        if self.motion_reliability < reliability_thresh:
-            cmd.data = "STOP" 
-            print(f"Decision: {cmd.data} | Reason: Unreliable Motion")
         
         elif center_depth < safety_thresh:
             left_depth = np.mean(self.latest_depth_map[:, :w//3])
@@ -88,12 +75,12 @@ class VehicleNavigationNode(Node):
             else:
                 cmd.data = "STOP" # 
             
-            print(f"Decision: {cmd.data} | Center Blocked (Depth: {center_depth:.2f})")
+            self.get_logger().info(f"Decision: {cmd.data} | Reason: Center Blocked (Depth: {center_depth:.2f})")
         
         # 3. Path is Clear
         else:
             cmd.data = "FORWARD"
-            print(f"Decision: {cmd.data} | Center Clear")
+            self.get_logger().info(f"Decision: {cmd.data} | Reason: Center Clear")
 
         self.publisher.publish(cmd)
 

@@ -4,7 +4,7 @@ from rclpy.node import Node  # base class for ros2 nodes (ros1: no node class)
 from rclpy.action import ActionServer  # creates action server in ros2 (ros1: actionlib)
 from std_msgs.msg import String  # standard string message type (same in ros1)
 
-from my_robot_interfaces.action import NavigateAction
+from visual_navigation_interfaces.action import NavigateAction
 # custom action interface
 # ros1: imported from package msg folder
 

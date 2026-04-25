@@ -16,7 +16,7 @@ class ROIFeatureNode(Node):
         self.orb = cv2.ORB_create()
 
         self.create_subscription(Image, '/camera_frames', self.feacture_callback, 10)
-        self.roi_pub = self.create_publisher(RoiFeatureList, '/roi_features', 100)
+        self.roi_pub = self.create_publisher(RoiFeatureList, '/roi_features', 10)
         self.declare_parameter('roi_size', 3)
 
         self.features = []
@@ -93,8 +93,8 @@ class ROIFeatureNode(Node):
                     cv2.putText(frame,
                                 f"std:{std_dev:.1f} kp:{num_keypoints}",
                                 (x_start + 4, y_start + 16),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.35,
-                                (0, 255, 255), 1)
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                (26, 25, 83), 3)
                     cv2.circle(frame,
                                (int(centroid_x), int(centroid_y)),
                                3, (0, 0, 255), -1)

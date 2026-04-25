@@ -4,7 +4,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from ultralytics import YOLO
 from std_msgs.msg import String
-from security_interfaces.msg import DetectionList, BoundingBox
+from visual_navigation_interfaces.msg import DetectionList, BoundingBox
 import cv2  
 import json
 
@@ -29,7 +29,7 @@ class ObjectDetectionNode(Node):
             self.camera_callback,
             10)
             
-        self.publisher_ = self.create_publisher(DetectionList, '/detected_objects', 10)
+        self.publisher_ = self.create_publisher(DetectionList, '/object_data', 10)
        
         self.get_logger().info(f'Node started with model: {model_p} and confidence: {conf_val}')
     
